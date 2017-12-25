@@ -1,0 +1,302 @@
+<center>
+	<div id="pauseOverlay"></div>
+	<div id="pauseBox">
+		<p class="pauseSymbol">❚❚</p>
+		<p>GAME PAUSED</p>
+	</div>
+	<p>
+		<span class="left">SCORE: <span id="scoreElement">0</span></span>
+		<span class="right">HIGHSCORE: <span id="highscoreElement">0</span></span>
+	</p>
+	<br>
+	<canvas id="c" width="600" height="600"></canvas>
+	<br>
+	<p class="instructions">
+		<span class="left">CONTROL WITH ARROW KEYS</span>
+		<span class="right">ESC OR P TO PAUSE GAME</span>
+	</p>
+</center>
+<style>
+	center {
+		margin-top: 100px;
+	}
+	canvas {
+		margin-top: -5px;
+		border: 5px solid #00FF00;
+		box-shadow: 0 0 50px #00ff0038;
+		cursor: none;
+	}
+	body {
+		background-color: black;
+		overflow: hidden;
+	}
+	p {
+		margin: 0;
+		width: 600px;
+		display: inline-block;
+		font-family: Courier New,Courier,Lucida Sans Typewriter,Lucida Typewriter,monospace; 
+		color: #00FF00;
+		font-size: 24px;
+		font-weight: 700;
+		text-shadow: 0 0 10px #00ff00ff;
+	}
+	#pauseOverlay {
+		display: none;
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
+		background-color: rgba(0,0,0,0.5);
+	}
+	#pauseBox {
+		display: none;
+		position: absolute;
+		margin-top: 274px;
+	}
+	#pauseBox p {
+		width: 100vw;
+	}
+	.pauseSymbol {
+		font-size: 45px;
+	}
+	.instructions {
+		font-size: 14px;
+	}
+	.left {
+		float: left;
+	}
+	.right {
+		float: right;
+	}
+</style>
+<script>
+window.onload = function() {
+	
+	// Settings
+	padding = 4;
+	tileCount = 20;
+	tileSize = 600 / tileCount;
+	
+	// Initial values
+	fpsInit = 5;
+	xVelInit = 1;
+	yVelInit = 0;
+	xPosInit = 8;
+	yPosInit = 3;
+	lengthInit = 5;
+	scoreInit = 0;
+	
+	//values
+	fps = 5;
+	score = 0;
+	highscore = 0;
+	shouldSpeedUp = false;
+	paused = false;
+	
+	// set up game
+	setInitialValues();
+	
+	// Boilerplate
+	canvas = document.getElementById("c");
+	ctx = canvas.getContext("2d");
+	ctx.shadowBlur = 10;
+	scoreElement = document.getElementById("scoreElement");
+	highscoreElement = document.getElementById("highscoreElement");
+	pauseOverlay = document.getElementById("pauseOverlay");
+	pauseBox = document.getElementById("pauseBox");
+	document.addEventListener("keydown", keyPress);
+	
+	// start game
+	gameLoop = setInterval(update, 1000/fps);
+	
+	function restartGameLoop() {
+		if (gameLoop) {
+			clearInterval(gameLoop);
+		}
+		gameLoop = setInterval(update, 1000/fps);
+	}
+
+	
+	function update() {
+		if (paused) {
+			clearInterval(gameLoop);
+			return;
+		}
+		// check if moving in reverse of direction, which is not possible
+		if ((xPos + xVel == trail[1].x && xVel != 0) || (yPos + yVel == trail[1].y && yVel != 0)) {
+			xVel *= -1;
+			yVel *= -1;
+		}
+	
+		// Move snake
+		xPos += xVel;
+		yPos += yVel;
+		
+		// Check for out of bounds
+		if (xPos < 0 || yPos < 0 || xPos >= tileCount ||yPos >= tileCount) {
+			resetGame();
+			return;
+		}
+		
+		// check for apple collection
+		if (xPos == xApple && yPos == yApple) {
+			score++;
+			length++;
+			shouldSpeedUp = fps < 15;
+			xApple = Math.floor(Math.random() * tileCount);
+			yApple = Math.floor(Math.random() * tileCount);
+			while (appleInTrail()) {
+				xApple = Math.floor(Math.random() * tileCount);
+				yApple = Math.floor(Math.random() * tileCount);
+			}
+		}
+		
+		// update snake trail
+		trail.splice(0,0,{x: xPos, y: yPos});
+		while (trail.length > length) {
+			trail.pop();
+		}
+		
+		// check for collision with self
+		for (var i = 1; i < trail.length; i++) {
+			let pos = trail[i];
+			if (pos.x == xPos && pos.y == yPos) {
+				resetGame();
+			}
+		}
+	
+		// Clear the canvas with black
+		ctx.fillStyle = "black";
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		
+		// Draw the apple
+		ctx.fillStyle = "#FF0000";
+		ctx.shadowColor = "#FF0000";
+		ctx.fillRect(
+			xApple * tileSize + padding,
+			yApple * tileSize + padding,
+			tileSize - padding,
+			tileSize - padding
+		);
+		
+		// Draw the snake
+		ctx.fillStyle = "#00FF00";
+		ctx.shadowColor = "#00FF00";
+		for (var i = 0; i < trail.length; i++) {
+			ctx.fillStyle = colorLuminance("#00FF00", -0.05 * ((i < 10) ? i : 10));
+			ctx.shadowColor = colorLuminance("#00FF00", -0.05 * ((i < 10) ? i : 10));
+			let pos = trail[i];
+			ctx.fillRect(
+				pos.x * tileSize + padding,
+				pos.y * tileSize + padding,
+				tileSize - padding,
+				tileSize - padding
+			);
+		}
+		
+		// update score label
+		scoreElement.innerHTML = score;
+		
+		// finally speed up game loop if applicable
+		if (shouldSpeedUp) {
+			shouldSpeedUp = false;
+			fps++;
+			restartGameLoop();
+		}
+	}
+	
+	function appleInTrail() {
+		for (var i = 0; i < trail.length; i++) {
+			if (xApple == trail[i].x && yApple == trail[i].y) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	function resetGame() {
+		if (highscore < score) {
+			highscore = score;
+			highscoreElement.innerHTML = highscore;
+		}
+		setInitialValues();
+		restartGameLoop();
+	}
+	
+	function setInitialValues() {
+		xPos = xPosInit;
+		yPos = yPosInit;
+		xVel = xVelInit;
+		yVel = yVelInit;
+		fps = fpsInit;
+		xApple = yApple = 10;
+		length = 5;
+		score = 0;
+		
+		trail = [];
+		for (var i = 0; i < length; i++) {
+			trail.push({x: xPos - i, y: yPos});
+		}
+	}
+	
+	function keyPress(e) {
+		switch(e.keyCode) {
+			case 37:
+				if (xVel == 1 || paused) return;
+				xVel = -1;
+				yVel = 0;
+				break;
+			case 38:
+				if (yVel == 1 || paused) return;
+				xVel = 0;
+				yVel = -1;
+				break;
+			case 39:
+				if (xVel == -1 || paused) return;
+				xVel = 1;
+				yVel = 0;
+				break;
+			case 40:
+				if (yVel == -1 || paused) return;
+				xVel = 0;
+				yVel = 1;
+				break;
+			case 27:
+			case 80:
+				togglePause();
+				break;
+		}
+	}
+	
+	function togglePause() {
+		paused = !paused;
+		if (!paused) {
+			restartGameLoop();
+			pauseBox.style.display = "none";
+			pauseOverlay.style.display = "none";
+		} else {
+			pauseBox.style.display = "block";
+			pauseOverlay.style.display = "block";
+		}
+	}
+	
+	function colorLuminance(hex, lum) {
+		// validate hex string
+		hex = String(hex).replace(/[^0-9a-f]/gi, '');
+		if (hex.length < 6) {
+			hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+		}
+		lum = lum || 0;
+		// convert to decimal and change luminosity
+		var rgb = "#", c, i;
+		for (i = 0; i < 3; i++) {
+			c = parseInt(hex.substr(i*2,2), 16);
+			c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+			rgb += ("00"+c).substr(c.length);
+		}
+		return rgb;
+	}
+	
+}
+</script>
